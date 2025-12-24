@@ -1,0 +1,62 @@
+name: API tests with Allure
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseUri:
+        description: Base URL for API
+        required: false
+        default: http://3.68.165.45
+      threadCount:
+        description: TestNG thread count (parallel methods)
+        required: false
+        default: '1'
+  schedule:
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      BASE_URI: ${{ github.event.inputs.baseUri || vars.BASE_URI || 'http://3.68.165.45' }}
+      THREAD_COUNT: ${{ github.event.inputs.threadCount || vars.THREAD_COUNT || '1' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: '21'
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw -B test -DbaseUri="${BASE_URI}" -Dthread.count="${THREAD_COUNT}"
+
+      - name: Generate Allure report
+        if: always()
+        run: ./mvnw -B allure:report
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/site/allure-maven-plugin
+
+      - name: Deploy to GitHub Pages
+        if: always()
+        id: deploy
+        uses: actions/deploy-pages@v4
